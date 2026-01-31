@@ -95,7 +95,7 @@ bot.on('message', async (msg) => {
     if (!currentData.includes(translatedText)) {
         currentData.push(translatedText);
         saveData(currentData);
-        bot.sendMessage(chatId, `✅ Đã lưu tiếng Anh: "${translatedText}"\n(Tổng: ${currentData.length} câu)`);
+        bot.sendMessage(chatId, `✅ "${translatedText}"`);
     } else {
         bot.sendMessage(chatId, `⚠️ Câu này ("${translatedText}") đã có trong kho rồi!`);
     }
