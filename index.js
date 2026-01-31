@@ -15,6 +15,13 @@ const openai = new OpenAI({
     apiKey: process.env.OPENROUTER_API_KEY,
 });
 
+// --- DUMMY SERVER CHO RENDER ---
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+app.get('/', (req, res) => res.send('Bot is running!'));
+app.listen(PORT, () => console.log(`Health check server listening on port ${PORT}`));
+
 // --- HÀM HỖ TRỢ ĐỌC/GHI FILE ---
 function loadData() {
     try {
