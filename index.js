@@ -106,32 +106,61 @@ bot.on('message', async (msg) => {
     }
 
     // 2. Đọc dữ liệu cũ
-    const currentData = loadData();
+    let currentData = loadData();
 
-    // 3. Kiểm tra trùng lặp và lưu
-    if (!currentData.includes(translatedText)) {
-        currentData.push(translatedText);
+    // 3. Kiểm tra trùng lặp và lưu (Hỗ trợ cả String cũ và Object mới)
+    const exists = currentData.some(item => {
+        const itemText = typeof item === 'string' ? item : item.text;
+        return itemText === translatedText;
+    });
+
+    if (!exists) {
+        currentData.push({ text: translatedText, lastSentAt: 0 });
         saveData(currentData);
         bot.sendMessage(chatId, `✅ "${translatedText}"`);
     } else {
-        bot.sendMessage(chatId, `⚠️ Câu này ("${translatedText}") đã có trong kho rồi!`);
+        bot.sendMessage(chatId, `⚠️ Câu này đã có trong kho rồi!`);
     }
 });
 
 // --- PHẦN 2: TỰ ĐỘNG GỬI THEO LỊCH ---
 function sendDailyLesson() {
-    const lessons = loadData();
+    let lessons = loadData();
+    const TWO_HOURS = 2 * 60 * 60 * 1000;
+    const now = Date.now();
 
     if (lessons.length === 0) {
         console.log("Kho dữ liệu trống.");
         return;
     }
 
-    const randomSentence = lessons[Math.floor(Math.random() * lessons.length)];
+    // Lọc những câu thỏa mãn: chưa gửi bao giờ HOẶC gửi cách đây > 2 giờ
+    const availableLessons = lessons.filter(item => {
+        const lastSentAt = typeof item === 'string' ? 0 : (item.lastSentAt || 0);
+        return (now - lastSentAt) > TWO_HOURS;
+    });
 
-    const message = `${randomSentence}`;
+    if (availableLessons.length === 0) {
+        console.log("Tất cả các câu đều đã được gửi trong 2h qua.");
+        return;
+    }
+
+    const selectedItem = availableLessons[Math.floor(Math.random() * availableLessons.length)];
+    const message = typeof selectedItem === 'string' ? selectedItem : selectedItem.text;
 
     bot.sendMessage(myChatId, message)
+        .then(() => {
+            // Cập nhật lastSentAt cho item đã chọn
+            const index = lessons.findIndex(item => {
+                const itemText = typeof item === 'string' ? item : item.text;
+                return itemText === message;
+            });
+
+            if (index !== -1) {
+                lessons[index] = { text: message, lastSentAt: now };
+                saveData(lessons);
+            }
+        })
         .catch((error) => console.error('Lỗi gửi tin:', error));
 }
 
