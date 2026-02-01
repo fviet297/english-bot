@@ -88,7 +88,10 @@ bot.on('message', async (msg) => {
             return;
         }
 
-        const listText = currentData.map((sentence, index) => `${index + 1}. ${sentence.text}`).join('\n');
+        const listText = currentData.map((item, index) => {
+            const content = typeof item === 'string' ? item : item.text;
+            return `${index + 1}. ${content}`;
+        }).join('\n');
         bot.sendMessage(chatId, `📚 *Danh sách câu đã lưu:*\n\n${listText}`, { parse_mode: 'Markdown' });
         return;
     }
@@ -117,7 +120,7 @@ bot.on('message', async (msg) => {
     if (!exists) {
         currentData.push({ text: translatedText, lastSentAt: 0 });
         saveData(currentData);
-        bot.sendMessage(chatId, `✅ "${translatedText}"`);
+        bot.sendMessage(chatId, `${translatedText}`);
     } else {
         bot.sendMessage(chatId, `⚠️ Câu này đã có trong kho rồi!`);
     }
