@@ -71,6 +71,11 @@ bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const text = msg.text;
 
+    if (text === '/test') {
+        sendDailyLesson();
+        return;
+    }
+
     if (text === '/start') {
         bot.sendMessage(chatId, `Xin chào! Hãy gửi câu bất kỳ, tôi sẽ dịch sang tiếng Anh và lưu lại.`);
         return;
