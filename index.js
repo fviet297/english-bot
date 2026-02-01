@@ -88,7 +88,7 @@ bot.on('message', async (msg) => {
             return;
         }
 
-        const listText = currentData.map((sentence, index) => `${index + 1}. ${sentence}`).join('\n');
+        const listText = currentData.map((sentence, index) => `${index + 1}. ${sentence.text}`).join('\n');
         bot.sendMessage(chatId, `📚 *Danh sách câu đã lưu:*\n\n${listText}`, { parse_mode: 'Markdown' });
         return;
     }
