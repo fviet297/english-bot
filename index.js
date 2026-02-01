@@ -76,6 +76,18 @@ bot.on('message', async (msg) => {
         return;
     }
 
+    if (text === '/list') {
+        const currentData = loadData();
+        if (currentData.length === 0) {
+            bot.sendMessage(chatId, `📭 Kho dữ liệu hiện đang trống.`);
+            return;
+        }
+
+        const listText = currentData.map((sentence, index) => `${index + 1}. ${sentence}`).join('\n');
+        bot.sendMessage(chatId, `📚 *Danh sách câu đã lưu:*\n\n${listText}`, { parse_mode: 'Markdown' });
+        return;
+    }
+
     if (!text) return;
 
     bot.sendMessage(chatId, `⏳ Đang dịch và xử lý...`);
