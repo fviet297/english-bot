@@ -7,7 +7,7 @@ const OpenAI = require('openai');
 // --- CẤU HÌNH ---
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const myChatId = process.env.MY_CHAT_ID;
-const DATA_FILE = 'data.json';
+const DATA_FILE = process.env.DATA_PATH || 'data.json';
 
 const bot = new TelegramBot(token, { polling: true });
 const openai = new OpenAI({
