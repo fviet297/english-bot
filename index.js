@@ -112,11 +112,9 @@ function sendDailyLesson() {
 
     const randomSentence = lessons[Math.floor(Math.random() * lessons.length)];
 
-    const message = `
-📝 Lesson: ${randomSentence}
-`;
+    const message = `${randomSentence}`;
 
-    bot.sendMessage(myChatId, message, { parse_mode: 'Markdown' })
+    bot.sendMessage(myChatId, message)
         .catch((error) => console.error('Lỗi gửi tin:', error));
 }
 
