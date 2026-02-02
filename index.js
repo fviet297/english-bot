@@ -96,6 +96,52 @@ bot.on('message', async (msg) => {
         return;
     }
 
+    if (text.startsWith('/delete')) {
+        const parts = text.split(/\s+/);
+        if (parts.length < 2) {
+            bot.sendMessage(chatId, "⚠️ Vui lòng nhập số thứ tự cần xoá. VD: `/delete 1 3 5` hoặc `/delete 1,2,3`", { parse_mode: 'Markdown' });
+            return;
+        }
+
+        // Lấy danh sách index, chuyển sang số, lọc bỏ cái không hợp lệ, sắp xếp giảm dần
+        const indicesToDelete = text.replace('/delete', '')
+            .split(/[\s,]+/)
+            .map(p => parseInt(p.trim()))
+            .filter(n => !isNaN(n))
+            .sort((a, b) => b - a);
+
+        if (indicesToDelete.length === 0) {
+            bot.sendMessage(chatId, "⚠️ Không tìm thấy số thứ tự hợp lệ.");
+            return;
+        }
+
+        let currentData = loadData();
+        let deletedCount = 0;
+
+        // Xoá từ dưới lên để không làm thay đổi index của các phần tử bên trên
+        indicesToDelete.forEach(idx => {
+            const arrayIdx = idx - 1;
+            if (arrayIdx >= 0 && arrayIdx < currentData.length) {
+                currentData.splice(arrayIdx, 1);
+                deletedCount++;
+            }
+        });
+
+        if (deletedCount > 0) {
+            saveData(currentData);
+            bot.sendMessage(chatId, `✅ Đã xoá ${deletedCount} câu. Hiện còn ${currentData.length} câu trong kho.`);
+        } else {
+            bot.sendMessage(chatId, "⚠️ Không tìm thấy vị trí nào tương ứng trong danh sách.");
+        }
+        return;
+    }
+
+    if (text === '/clear') {
+        saveData([]);
+        bot.sendMessage(chatId, "🗑️ Đã xoá toàn bộ dữ liệu trong kho.");
+        return;
+    }
+
     if (!text) return;
 
     bot.sendMessage(chatId, `⏳ Đang dịch và xử lý...`);
