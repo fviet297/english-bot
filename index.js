@@ -137,8 +137,17 @@ bot.on('message', async (msg) => {
     }
 
     if (text === '/clear') {
-        saveData([]);
-        bot.sendMessage(chatId, "🗑️ Đã xoá toàn bộ dữ liệu trong kho.");
+        bot.sendMessage(chatId, "⚠️ Bạn có chắc chắn muốn xoá *TOÀN BỘ* dữ liệu không?", {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { text: "✅ Có, xoá hết", callback_data: 'confirm_clear_all' },
+                        { text: "❌ Không, huỷ bỏ", callback_data: 'cancel_clear' }
+                    ]
+                ]
+            }
+        });
         return;
     }
 
@@ -169,6 +178,29 @@ bot.on('message', async (msg) => {
         bot.sendMessage(chatId, `${translatedText}`);
     } else {
         bot.sendMessage(chatId, `⚠️ Câu này đã có trong kho rồi!`);
+    }
+});
+
+// --- PHẦN 1.1: XỬ LÝ XÁC NHẬN (CALLBACK QUERY) ---
+bot.on('callback_query', (query) => {
+    const chatId = query.message.chat.id;
+    const messageId = query.message.message_id;
+
+    if (query.data === 'confirm_clear_all') {
+        saveData([]);
+        bot.answerCallbackQuery(query.id, { text: "Đã xoá sạch kho dữ liệu!" });
+        bot.editMessageText("🗑️ *Đã xoá toàn bộ dữ liệu trong kho.*", {
+            chat_id: chatId,
+            message_id: messageId,
+            parse_mode: 'Markdown'
+        });
+    } else if (query.data === 'cancel_clear') {
+        bot.answerCallbackQuery(query.id, { text: "Đã huỷ thao tác." });
+        bot.editMessageText("♻️ *Đã huỷ lệnh xoá tất cả.*", {
+            chat_id: chatId,
+            message_id: messageId,
+            parse_mode: 'Markdown'
+        });
     }
 });
 
