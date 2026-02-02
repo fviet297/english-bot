@@ -42,6 +42,8 @@ function saveData(data) {
     }
 }
 
+const googleTTS = require('google-tts-api');
+
 // --- HÀM DỊCH BẰNG OPENAI ---
 async function translateToEnglish(text) {
     try {
@@ -63,6 +65,24 @@ async function translateToEnglish(text) {
     } catch (error) {
         console.error("Lỗi OpenAI:", error);
         return null;
+    }
+}
+
+// --- HÀM GỬI VOICE ---
+async function sendPronunciation(chatId, text) {
+    if (!text) return;
+    try {
+        // google-tts-api limit is 200 chars. 
+        // For simplicity in this bot (usually short sentences), we just take the first 200 chars or handle splitting if strictly needed.
+        // But let's assume short sentences for now or let it truncate.
+        const audioUrl = googleTTS.getAudioUrl(text, {
+            lang: 'en',
+            slow: true,
+            host: 'https://translate.google.com',
+        });
+        await bot.sendAudio(chatId, audioUrl);
+    } catch (err) {
+        console.error("Lỗi gửi voice:", err);
     }
 }
 
@@ -175,7 +195,9 @@ bot.on('message', async (msg) => {
     if (!exists) {
         currentData.push({ text: translatedText, lastSentAt: 0 });
         saveData(currentData);
-        bot.sendMessage(chatId, `${translatedText}`);
+        await bot.sendMessage(chatId, `${translatedText}`);
+        // Gửi kèm audio
+        await sendPronunciation(chatId, translatedText);
     } else {
         bot.sendMessage(chatId, `⚠️ Câu này đã có trong kho rồi!`);
     }
@@ -230,7 +252,7 @@ function sendDailyLesson() {
     const message = typeof selectedItem === 'string' ? selectedItem : selectedItem.text;
 
     bot.sendMessage(myChatId, message)
-        .then(() => {
+        .then(async () => {
             // Cập nhật lastSentAt cho item đã chọn
             const index = lessons.findIndex(item => {
                 const itemText = typeof item === 'string' ? item : item.text;
@@ -241,6 +263,8 @@ function sendDailyLesson() {
                 lessons[index] = { text: message, lastSentAt: now };
                 saveData(lessons);
             }
+            // Gửi kèm audio
+            await sendPronunciation(myChatId, message);
         })
         .catch((error) => console.error('Lỗi gửi tin:', error));
 }

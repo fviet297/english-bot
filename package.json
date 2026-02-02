@@ -14,6 +14,7 @@
   "dependencies": {
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "google-tts-api": "^2.0.2",
     "node-cron": "^4.2.1",
     "node-telegram-bot-api": "^0.67.0",
     "openai": "^6.17.0"
