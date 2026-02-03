@@ -2,6 +2,8 @@ require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const cron = require('node-cron');
 const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 const OpenAI = require('openai');
 
 // --- CẤU HÌNH ---
@@ -42,13 +44,15 @@ function saveData(data) {
     }
 }
 
-const googleTTS = require('google-tts-api');
+const ttsClient = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+});
 
-// --- HÀM DỊCH BẰNG OPENAI ---
+// --- HÀM DỊCH BẰNG OPENAI (OpenRouter) ---
 async function translateToEnglish(text) {
     try {
         const response = await openai.chat.completions.create({
-            model: "google/gemini-2.0-flash-001",
+            model: "openai/gpt-4.1-nano",
             messages: [
                 {
                     role: "system",
@@ -68,21 +72,55 @@ async function translateToEnglish(text) {
     }
 }
 
-// --- HÀM GỬI VOICE ---
+// --- HÀM GỬI VOICE (OpenAI TTS) ---
+// --- HÀM GỬI VOICE (OpenAI TTS + Caching) ---
+// Cho phép cấu hình đường dẫn cache qua biến môi trường (để mount Volume trên Railway/Docker)
+const AUDIO_CACHE_DIR = process.env.AUDIO_CACHE_PATH || path.join(__dirname, 'audio_cache');
+
+if (!fs.existsSync(AUDIO_CACHE_DIR)) {
+    try {
+        fs.mkdirSync(AUDIO_CACHE_DIR, { recursive: true });
+    } catch (err) {
+        console.error("Lỗi tạo thư mục cache:", err);
+    }
+}
+
 async function sendPronunciation(chatId, text) {
     if (!text) return;
     try {
-        // google-tts-api limit is 200 chars. 
-        // For simplicity in this bot (usually short sentences), we just take the first 200 chars or handle splitting if strictly needed.
-        // But let's assume short sentences for now or let it truncate.
-        const audioUrl = googleTTS.getAudioUrl(text, {
-            lang: 'en',
-            slow: true,
-            host: 'https://translate.google.com',
+        // 1. Tạo tên file dựa trên hash nội dung (MD5) để cache
+        const hash = crypto.createHash('md5').update(text).digest('hex');
+        const fileName = `${hash}.mp3`;
+        const filePath = path.join(AUDIO_CACHE_DIR, fileName);
+
+        // 2. Kiểm tra cache
+        if (fs.existsSync(filePath)) {
+            console.log(`[Cache Hit] Sử dụng audio có sẵn: ${fileName}`);
+            await bot.sendAudio(chatId, fs.createReadStream(filePath), { caption: text });
+            return;
+        }
+
+        // 3. Nếu chưa có, gọi API
+        console.log(`[Cache Miss] Đang tạo audio mới...`);
+        const mp3 = await ttsClient.audio.speech.create({
+            model: "tts-1",
+            voice: "sage",
+            input: text,
         });
-        await bot.sendAudio(chatId, audioUrl);
+
+        const buffer = Buffer.from(await mp3.arrayBuffer());
+
+        // 4. Lưu vào cache
+        fs.writeFileSync(filePath, buffer);
+        console.log(`[Cache Saved] Đã lưu: ${fileName}`);
+
+        // 5. Gửi file từ cache
+        await bot.sendAudio(chatId, fs.createReadStream(filePath), { caption: text });
+
     } catch (err) {
-        console.error("Lỗi gửi voice:", err);
+        console.error("Lỗi gửi voice (OpenAI):", err);
+        // Fallback: gửi text nếu voice lỗi
+        await bot.sendMessage(chatId, text);
     }
 }
 
@@ -98,6 +136,32 @@ bot.on('message', async (msg) => {
 
     if (text === '/start') {
         bot.sendMessage(chatId, `Xin chào! Hãy gửi câu bất kỳ, tôi sẽ dịch sang tiếng Anh và lưu lại.`);
+        return;
+    }
+
+    if (text.startsWith('/voice')) {
+        const parts = text.split(/\s+/);
+        if (parts.length < 2) {
+            bot.sendMessage(chatId, `⚠️ Cú pháp: \`/voice [số thứ tự]\`\n(Xem số thứ tự bằng lệnh \`/list\`)`, { parse_mode: 'Markdown' });
+            return;
+        }
+
+        const idx = parseInt(parts[1]);
+        if (isNaN(idx)) {
+            bot.sendMessage(chatId, `⚠️ Số thứ tự không hợp lệ.`, { parse_mode: 'Markdown' });
+            return;
+        }
+
+        const currentData = loadData();
+        const arrayIdx = idx - 1;
+
+        if (arrayIdx >= 0 && arrayIdx < currentData.length) {
+            const item = currentData[arrayIdx];
+            const content = typeof item === 'string' ? item : item.text;
+            sendPronunciation(chatId, content);
+        } else {
+            bot.sendMessage(chatId, `⚠️ Không tìm thấy câu số ${idx}.`);
+        }
         return;
     }
 
@@ -195,8 +259,7 @@ bot.on('message', async (msg) => {
     if (!exists) {
         currentData.push({ text: translatedText, lastSentAt: 0 });
         saveData(currentData);
-        await bot.sendMessage(chatId, `${translatedText}`);
-        // Gửi kèm audio
+        // Gửi audio kèm caption (gộp text vào đây)
         await sendPronunciation(chatId, translatedText);
     } else {
         bot.sendMessage(chatId, `⚠️ Câu này đã có trong kho rồi!`);
@@ -251,7 +314,8 @@ function sendDailyLesson() {
     const selectedItem = availableLessons[Math.floor(Math.random() * availableLessons.length)];
     const message = typeof selectedItem === 'string' ? selectedItem : selectedItem.text;
 
-    bot.sendMessage(myChatId, message)
+    // Thay vì gửi tin nhắn riêng, gọi luôn hàm gửi audio (có caption)
+    sendPronunciation(myChatId, message)
         .then(async () => {
             // Cập nhật lastSentAt cho item đã chọn
             const index = lessons.findIndex(item => {
@@ -263,8 +327,6 @@ function sendDailyLesson() {
                 lessons[index] = { text: message, lastSentAt: now };
                 saveData(lessons);
             }
-            // Gửi kèm audio
-            await sendPronunciation(myChatId, message);
         })
         .catch((error) => console.error('Lỗi gửi tin:', error));
 }
