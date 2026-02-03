@@ -56,7 +56,7 @@ async function translateToEnglish(text) {
             messages: [
                 {
                     role: "system",
-                    content: "You are a professional translator. Translate the following text to English. Respond ONLY with the translated text and nothing else."
+                    content: "You are a professional translator. Translate the following text to English at a B1 (Intermediate) level. Use simple and clear vocabulary, suitable for intermediate learners. Respond ONLY with the translated text and nothing else."
                 },
                 {
                     role: "user",
@@ -96,7 +96,12 @@ async function sendPronunciation(chatId, text) {
         // 2. Kiểm tra cache
         if (fs.existsSync(filePath)) {
             console.log(`[Cache Hit] Sử dụng audio có sẵn: ${fileName}`);
-            await bot.sendAudio(chatId, fs.createReadStream(filePath), { caption: text });
+            const shortTitle = text.length > 50 ? text.substring(0, 47) + '...' : text;
+            await bot.sendAudio(chatId, fs.createReadStream(filePath), {
+                caption: text,
+                title: shortTitle,
+                performer: 'English Bot'
+            });
             return;
         }
 
@@ -115,7 +120,13 @@ async function sendPronunciation(chatId, text) {
         console.log(`[Cache Saved] Đã lưu: ${fileName}`);
 
         // 5. Gửi file từ cache
-        await bot.sendAudio(chatId, fs.createReadStream(filePath), { caption: text });
+        // Thêm title để hiển thị tên đẹp trên thông báo thay vì tên file hash
+        const shortTitle = text.length > 50 ? text.substring(0, 47) + '...' : text;
+        await bot.sendAudio(chatId, fs.createReadStream(filePath), {
+            caption: text,
+            title: shortTitle,
+            performer: 'English Bot'
+        });
 
     } catch (err) {
         console.error("Lỗi gửi voice (OpenAI):", err);
