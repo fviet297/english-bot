@@ -10,6 +10,7 @@ const OpenAI = require('openai');
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const myChatId = process.env.MY_CHAT_ID;
 const DATA_FILE = process.env.DATA_PATH || 'data.json';
+const TTS_SPEED = 0.85; // Tốc độ đọc (0.25 đến 4.0). Dưới 1.0 là chậm, trên 1.0 là nhanh.
 
 const bot = new TelegramBot(token, { polling: true });
 const openai = new OpenAI({
@@ -88,8 +89,8 @@ if (!fs.existsSync(AUDIO_CACHE_DIR)) {
 async function sendPronunciation(chatId, text) {
     if (!text) return;
     try {
-        // 1. Tạo tên file dựa trên hash nội dung (MD5) để cache
-        const hash = crypto.createHash('md5').update(text).digest('hex');
+        // 1. Tạo tên file dựa trên hash nội dung (MD5) + tốc độ để cache
+        const hash = crypto.createHash('md5').update(text + TTS_SPEED).digest('hex');
         const fileName = `${hash}.mp3`;
         const filePath = path.join(AUDIO_CACHE_DIR, fileName);
 
@@ -111,6 +112,7 @@ async function sendPronunciation(chatId, text) {
             model: "tts-1",
             voice: "sage",
             input: text,
+            speed: TTS_SPEED,
         });
 
         const buffer = Buffer.from(await mp3.arrayBuffer());
