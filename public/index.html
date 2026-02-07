@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>English Bot - Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body class="dark-theme">
+    <div class="background-glow"></div>
+
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i class="fas fa-robot"></i>
+                <h1>English Bot</h1>
+            </div>
+            <button id="clear-all-btn" class="icon-btn" title="Clear All">
+                <i class="fas fa-trash-sweep"></i>
+            </button>
+        </header>
+
+        <main>
+            <div id="result-container" class="result-container">
+                <div id="welcome-msg" class="welcome-msg">
+                    <p>Chào bạn! Nhập một câu tiếng Việt bên dưới để bắt đầu dịch.</p>
+                </div>
+                <div id="translation-result" class="translation-result hidden">
+                    <div id="text-display" class="text-display"></div>
+                    <button id="replay-btn" class="replay-btn" title="Listen Again">
+                        <i class="fas fa-volume-up"></i>
+                    </button>
+                </div>
+                <div id="loader" class="loader hidden">
+                    <div class="spinner"></div>
+                    <p>Translating...</p>
+                </div>
+            </div>
+        </main>
+
+        <footer class="input-bar">
+            <div class="input-container">
+                <input type="text" id="new-text" placeholder="Type a Vietnamese sentence..." autofocus
+                    autocomplete="off">
+                <button id="add-btn" class="send-btn">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+            <div id="status-msg" class="status-msg"></div>
+        </footer>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="modal" class="modal hidden">
+        <div class="modal-content glass-card">
+            <h3>Clear All Data?</h3>
+            <p>This will delete all stored sentences and audio cache.</p>
+            <div class="modal-actions">
+                <button id="confirm-clear" class="primary-btn danger">Yes, Reset</button>
+                <button id="cancel-clear" class="second-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

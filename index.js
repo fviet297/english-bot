@@ -18,12 +18,88 @@ const openai = new OpenAI({
     apiKey: process.env.OPENROUTER_API_KEY,
 });
 
-// --- DUMMY SERVER CHO RENDER ---
+// Cho phép cấu hình đường dẫn cache qua biến môi trường (để mount Volume trên Railway/Docker)
+const AUDIO_CACHE_DIR = process.env.AUDIO_CACHE_DIR || process.env.AUDIO_CACHE_PATH || path.join(__dirname, 'audio_cache');
+
+if (!fs.existsSync(AUDIO_CACHE_DIR)) {
+    try {
+        fs.mkdirSync(AUDIO_CACHE_DIR, { recursive: true });
+    } catch (err) {
+        console.error("Lỗi tạo thư mục cache:", err);
+    }
+}
+
+// --- DUMMY SERVER CHO RENDER & UI ---
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.get('/', (req, res) => res.send('Bot is running!'));
-app.listen(PORT, () => console.log(`Health check server listening on port ${PORT}`));
+
+app.use(express.json());
+app.use(express.static('public'));
+app.use('/audio', express.static(AUDIO_CACHE_DIR));
+
+// API: Lấy danh sách dữ liệu
+app.get('/api/data', (req, res) => {
+    const data = loadData();
+    const dataWithHash = data.map(item => {
+        const text = typeof item === 'string' ? item : item.text;
+        const hash = crypto.createHash('md5').update(text + TTS_SPEED).digest('hex');
+        return {
+            ...(typeof item === 'string' ? { text: item } : item),
+            audioUrl: `/audio/${hash}.mp3`
+        };
+    });
+    res.json(dataWithHash);
+});
+
+// API: Dịch và lưu mới
+app.post('/api/translate', async (req, res) => {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: 'Thiếu nội dung' });
+
+    const translatedText = await translateToEnglish(text);
+    if (!translatedText) return res.status(500).json({ error: 'Lỗi dịch thuật' });
+
+    let currentData = loadData();
+    const exists = currentData.some(item => (typeof item === 'string' ? item : item.text) === translatedText);
+
+    if (!exists) {
+        const newItem = { text: translatedText, lastSentAt: 0 };
+        currentData.push(newItem);
+        saveData(currentData);
+        // Tạo audio sẵn luôn
+        await sendPronunciation(null, translatedText);
+        res.json({ success: true, data: newItem });
+    } else {
+        res.status(400).json({ error: 'Câu này đã tồn tại' });
+    }
+});
+
+// API: Xoá một câu
+app.delete('/api/delete/:index', (req, res) => {
+    const idx = parseInt(req.params.index);
+    let currentData = loadData();
+
+    if (idx >= 0 && idx < currentData.length) {
+        const item = currentData[idx];
+        const content = typeof item === 'string' ? item : item.text;
+        deleteAudioFile(content);
+        currentData.splice(idx, 1);
+        saveData(currentData);
+        res.json({ success: true });
+    } else {
+        res.status(404).json({ error: 'Không tìm thấy' });
+    }
+});
+
+// API: Xoá tất cả
+app.delete('/api/clear', (req, res) => {
+    clearAudioCache();
+    saveData([]);
+    res.json({ success: true });
+});
+
+app.listen(PORT, () => console.log(`Server & UI running on port ${PORT}`));
 
 // --- HÀM HỖ TRỢ ĐỌC/GHI FILE ---
 function loadData() {
@@ -75,17 +151,6 @@ async function translateToEnglish(text) {
 
 // --- HÀM GỬI VOICE (OpenAI TTS) ---
 // --- HÀM GỬI VOICE (OpenAI TTS + Caching) ---
-// Cho phép cấu hình đường dẫn cache qua biến môi trường (để mount Volume trên Railway/Docker)
-const AUDIO_CACHE_DIR = process.env.AUDIO_CACHE_PATH || path.join(__dirname, 'audio_cache');
-
-if (!fs.existsSync(AUDIO_CACHE_DIR)) {
-    try {
-        fs.mkdirSync(AUDIO_CACHE_DIR, { recursive: true });
-    } catch (err) {
-        console.error("Lỗi tạo thư mục cache:", err);
-    }
-}
-
 async function sendPronunciation(chatId, text) {
     if (!text) return;
     try {
@@ -101,7 +166,7 @@ async function sendPronunciation(chatId, text) {
             await bot.sendAudio(chatId, fs.createReadStream(filePath), {
                 caption: text,
                 title: shortTitle,
-                performer: 'English Bot'
+                performer: ''
             });
             return;
         }
@@ -124,16 +189,54 @@ async function sendPronunciation(chatId, text) {
         // 5. Gửi file từ cache
         // Thêm title để hiển thị tên đẹp trên thông báo thay vì tên file hash
         const shortTitle = text.length > 50 ? text.substring(0, 47) + '...' : text;
-        await bot.sendAudio(chatId, fs.createReadStream(filePath), {
-            caption: text,
-            title: shortTitle,
-            performer: 'English Bot'
-        });
+
+        // Chỉ gửi Telegram nếu có chatId
+        if (chatId) {
+            await bot.sendAudio(chatId, fs.createReadStream(filePath), {
+                caption: text,
+                title: shortTitle,
+                performer: ''
+            });
+        }
+
+        return filePath;
 
     } catch (err) {
         console.error("Lỗi gửi voice (OpenAI):", err);
         // Fallback: gửi text nếu voice lỗi
-        await bot.sendMessage(chatId, text);
+        if (chatId) await bot.sendMessage(chatId, text);
+        return null;
+    }
+}
+
+// --- HÀM XOÁ AUDIO TRONG CACHE ---
+function deleteAudioFile(text) {
+    if (!text) return;
+    try {
+        const hash = crypto.createHash('md5').update(text + TTS_SPEED).digest('hex');
+        const fileName = `${hash}.mp3`;
+        const filePath = path.join(AUDIO_CACHE_DIR, fileName);
+
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            console.log(`[Cache Deleted] Đã xoá file: ${fileName}`);
+        }
+    } catch (err) {
+        console.error("Lỗi khi xoá file audio:", err);
+    }
+}
+
+function clearAudioCache() {
+    try {
+        if (fs.existsSync(AUDIO_CACHE_DIR)) {
+            const files = fs.readdirSync(AUDIO_CACHE_DIR);
+            for (const file of files) {
+                fs.unlinkSync(path.join(AUDIO_CACHE_DIR, file));
+            }
+            console.log(`[Cache Cleared] Đã dọn dẹp toàn bộ thư mục audio_cache.`);
+        }
+    } catch (err) {
+        console.error("Lỗi khi dọn dẹp cache:", err);
     }
 }
 
@@ -219,6 +322,12 @@ bot.on('message', async (msg) => {
         indicesToDelete.forEach(idx => {
             const arrayIdx = idx - 1;
             if (arrayIdx >= 0 && arrayIdx < currentData.length) {
+                const item = currentData[arrayIdx];
+                const content = typeof item === 'string' ? item : item.text;
+
+                // Xoá file audio tương ứng trong cache
+                deleteAudioFile(content);
+
                 currentData.splice(arrayIdx, 1);
                 deletedCount++;
             }
@@ -285,9 +394,12 @@ bot.on('callback_query', (query) => {
     const messageId = query.message.message_id;
 
     if (query.data === 'confirm_clear_all') {
+        // Xoá toàn bộ file trong cache
+        clearAudioCache();
+
         saveData([]);
-        bot.answerCallbackQuery(query.id, { text: "Đã xoá sạch kho dữ liệu!" });
-        bot.editMessageText("🗑️ *Đã xoá toàn bộ dữ liệu trong kho.*", {
+        bot.answerCallbackQuery(query.id, { text: "Đã xoá sạch kho dữ liệu và cache!" });
+        bot.editMessageText("🗑️ *Đã xoá toàn bộ dữ liệu và file âm thanh.*", {
             chat_id: chatId,
             message_id: messageId,
             parse_mode: 'Markdown'
