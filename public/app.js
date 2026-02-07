@@ -11,7 +11,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const textDisplay = document.getElementById('text-display');
     const replayBtn = document.getElementById('replay-btn');
 
-    // Modal Elements
+    // Library Elements
+    const libraryBtn = document.getElementById('library-btn');
+    const libraryModal = document.getElementById('library-modal');
+    const libraryList = document.getElementById('library-list');
+    const closeLibraryBtn = document.getElementById('close-library');
+    const selectAllCb = document.getElementById('select-all-cb');
+    const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+    const selectedCountSpan = document.getElementById('selected-count');
+
+    // Confirmation Modal Elements
     const modal = document.getElementById('modal');
     const confirmClearBtn = document.getElementById('confirm-clear');
     const cancelClearBtn = document.getElementById('cancel-clear');
@@ -19,6 +28,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let isProcessing = false;
     let currentAudio = null;
     let lastAudioUrl = '';
+    let selectedIndices = new Set();
+    let currentData = [];
 
     // Add New Sentence
     async function addSentence() {
@@ -40,12 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (response.ok) {
                 newTextInput.value = '';
                 showResult(result.data.text);
-
-                // Get audio URL (need to construct it since /api/translate might not return hash based URL directly yet)
-                // Actually, the server creates it. Let's fetch data to get the latest item's audioUrl or just wait for server update.
-                // For now, let's fetch all data to find the new item's audio URL (most reliable)
                 await syncAndPlayLatest(result.data.text);
-
                 showStatus('', '');
             } else {
                 showStatus(result.error || 'Something went wrong', 'error');
@@ -77,10 +83,8 @@ document.addEventListener('DOMContentLoaded', () => {
         welcomeMsg.classList.add('hidden');
         translationResult.classList.remove('hidden');
         textDisplay.textContent = text;
-
-        // Simple animation trigger
         textDisplay.style.animation = 'none';
-        textDisplay.offsetHeight; // trigger reflow
+        textDisplay.offsetHeight;
         textDisplay.style.animation = null;
     }
 
@@ -96,10 +100,96 @@ document.addEventListener('DOMContentLoaded', () => {
         icon.className = 'fas fa-spinner fa-spin';
         currentAudio.onplaying = () => icon.className = 'fas fa-volume-up';
         currentAudio.onended = () => icon.className = 'fas fa-volume-up';
-        currentAudio.onerror = () => icon.className = 'fas fa-exclamation-triangle';
     }
 
-    // Clear All
+    // Library / History Logic
+    async function openLibrary() {
+        libraryModal.classList.remove('hidden');
+        await fetchAndRenderLibrary();
+    }
+
+    async function fetchAndRenderLibrary() {
+        try {
+            const response = await fetch('/api/data');
+            currentData = await response.json();
+            selectedIndices.clear();
+            renderLibraryItems();
+            updateSelectedUI();
+        } catch (error) {
+            console.error('Error loading library:', error);
+        }
+    }
+
+    function renderLibraryItems() {
+        libraryList.innerHTML = '';
+        if (currentData.length === 0) {
+            libraryList.innerHTML = '<div style="text-align: center; padding: 3rem; color: var(--text-muted);">No history found.</div>';
+            return;
+        }
+
+        currentData.forEach((item, index) => {
+            const div = document.createElement('div');
+            div.className = 'library-item';
+            div.innerHTML = `
+                <label class="checkbox-container">
+                    <input type="checkbox" data-index="${index}" ${selectedIndices.has(index) ? 'checked' : ''}>
+                    <span class="checkmark"></span>
+                </label>
+                <div class="item-content">${item.text}</div>
+                <button class="icon-btn play-item-btn" title="Play"><i class="fas fa-play"></i></button>
+            `;
+
+            const cb = div.querySelector('input');
+            cb.onchange = (e) => {
+                if (e.target.checked) selectedIndices.add(index);
+                else selectedIndices.delete(index);
+                updateSelectedUI();
+            };
+
+            div.querySelector('.play-item-btn').onclick = () => playAudio(item.audioUrl);
+
+            libraryList.appendChild(div);
+        });
+    }
+
+    function updateSelectedUI() {
+        const count = selectedIndices.size;
+        selectedCountSpan.textContent = count;
+        deleteSelectedBtn.classList.toggle('hidden', count === 0);
+        selectAllCb.checked = count === currentData.length && currentData.length > 0;
+    }
+
+    selectAllCb.onchange = (e) => {
+        if (e.target.checked) {
+            currentData.forEach((_, i) => selectedIndices.add(i));
+        } else {
+            selectedIndices.clear();
+        }
+        renderLibraryItems();
+        updateSelectedUI();
+    }
+
+    async function deleteSelected() {
+        if (!confirm(`Are you sure you want to delete ${selectedIndices.size} items?`)) return;
+
+        try {
+            const indices = Array.from(selectedIndices);
+            const response = await fetch('/api/delete-multiple', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ indices })
+            });
+
+            if (response.ok) {
+                await fetchAndRenderLibrary();
+                showStatus('Items deleted successfully');
+            }
+        } catch (error) {
+            showStatus('Failed to delete items', 'error');
+        }
+    }
+
+    // Clear All (Global Reset)
     async function clearAll() {
         modal.classList.add('hidden');
         loader.classList.remove('hidden');
@@ -108,7 +198,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (response.ok) {
                 welcomeMsg.classList.remove('hidden');
                 translationResult.classList.add('hidden');
-                showStatus('Library reset successfully', '');
+                showStatus('Library reset successfully');
+                if (!libraryModal.classList.contains('hidden')) fetchAndRenderLibrary();
             }
         } catch (error) {
             showStatus('Failed to clear library', 'error');
@@ -122,14 +213,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function showStatus(msg, type = '') {
         statusMsg.textContent = msg;
         statusMsg.style.color = type === 'error' ? 'var(--danger)' : 'var(--text-muted)';
+        setTimeout(() => {
+            if (statusMsg.textContent === msg) statusMsg.textContent = '';
+        }, 3000);
     }
 
     function setLoadingState(isLoading) {
         addBtn.disabled = isLoading;
         loader.classList.toggle('hidden', !isLoading);
-        if (isLoading) {
-            translationResult.classList.add('hidden');
-        }
     }
 
     // Event Listeners
@@ -137,10 +228,13 @@ document.addEventListener('DOMContentLoaded', () => {
     newTextInput.onkeypress = (e) => { if (e.key === 'Enter') addSentence(); };
     replayBtn.onclick = () => lastAudioUrl && playAudio(lastAudioUrl);
 
+    libraryBtn.onclick = openLibrary;
+    closeLibraryBtn.onclick = () => libraryModal.classList.add('hidden');
+    deleteSelectedBtn.onclick = deleteSelected;
+
     clearAllBtn.onclick = () => modal.classList.remove('hidden');
     cancelClearBtn.onclick = () => modal.classList.add('hidden');
     confirmClearBtn.onclick = clearAll;
 
-    // Ensure focus on load
     newTextInput.focus();
 });

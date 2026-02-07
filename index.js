@@ -92,6 +92,32 @@ app.delete('/api/delete/:index', (req, res) => {
     }
 });
 
+// API: Xoá nhiều câu
+app.post('/api/delete-multiple', (req, res) => {
+    const { indices } = req.body;
+    if (!Array.isArray(indices) || indices.length === 0) {
+        return res.status(400).json({ error: 'Danh sách chỉ số không hợp lệ' });
+    }
+
+    let currentData = loadData();
+    // Sắp xếp giảm dần để tránh lệch index khi xoá
+    const sortedIndices = [...indices].sort((a, b) => b - a);
+    let deletedCount = 0;
+
+    sortedIndices.forEach(idx => {
+        if (idx >= 0 && idx < currentData.length) {
+            const item = currentData[idx];
+            const content = typeof item === 'string' ? item : item.text;
+            deleteAudioFile(content);
+            currentData.splice(idx, 1);
+            deletedCount++;
+        }
+    });
+
+    saveData(currentData);
+    res.json({ success: true, deletedCount });
+});
+
 // API: Xoá tất cả
 app.delete('/api/clear', (req, res) => {
     clearAudioCache();

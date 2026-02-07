@@ -21,9 +21,14 @@
                 <i class="fas fa-robot"></i>
                 <h1>English Bot</h1>
             </div>
-            <button id="clear-all-btn" class="icon-btn" title="Clear All">
-                <i class="fas fa-trash-sweep"></i>
-            </button>
+            <div class="header-actions">
+                <button id="library-btn" class="icon-btn" title="Library">
+                    <i class="fas fa-history"></i>
+                </button>
+                <button id="clear-all-btn" class="icon-btn" title="Clear All Data">
+                    <i class="fas fa-trash-sweep"></i>
+                </button>
+            </div>
         </header>
 
         <main>
@@ -54,6 +59,31 @@
             </div>
             <div id="status-msg" class="status-msg"></div>
         </footer>
+    </div>
+
+    <!-- Library Modal -->
+    <div id="library-modal" class="modal hidden">
+        <div class="modal-content glass-card library-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-history"></i> Translation History</h3>
+                <div class="header-tools">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="select-all-cb">
+                        <span class="checkmark"></span>
+                        Select All
+                    </label>
+                    <button id="close-library" class="icon-btn"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+            <div id="library-list" class="library-list">
+                <!-- History items will be injected here -->
+            </div>
+            <div class="modal-footer">
+                <button id="delete-selected-btn" class="primary-btn danger hidden">
+                    <i class="fas fa-trash-alt"></i> Delete Selected (<span id="selected-count">0</span>)
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Confirmation Modal -->
