@@ -10,7 +10,7 @@ const OpenAI = require('openai');
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const myChatId = process.env.MY_CHAT_ID;
 const DATA_FILE = process.env.DATA_PATH || 'data.json';
-const TTS_SPEED = 0.85; // Tốc độ đọc (0.25 đến 4.0). Dưới 1.0 là chậm, trên 1.0 là nhanh.
+const TTS_SPEED = 0.7; // Tốc độ đọc (0.25 đến 4.0). Dưới 1.0 là chậm, trên 1.0 là nhanh.
 
 const bot = new TelegramBot(token, { polling: true });
 const openai = new OpenAI({
@@ -159,7 +159,7 @@ async function translateToEnglish(text) {
             messages: [
                 {
                     role: "system",
-                    content: "You are a professional translator. Translate the following text to English at a B1 (Intermediate) level. Use simple and clear vocabulary, suitable for intermediate learners. Respond ONLY with the translated text and nothing else."
+                    content: "You are a professional translator. Translate the following text to English at a A2 (Beginner) level. Use simple and clear vocabulary, suitable for intermediate learners. Respond ONLY with the translated text and nothing else."
                 },
                 {
                     role: "user",
@@ -385,7 +385,7 @@ bot.on('message', async (msg) => {
 
     if (!text) return;
 
-    bot.sendMessage(chatId, `⏳ Đang dịch và xử lý...`);
+    // bot.sendMessage(chatId, `⏳ Đang dịch và xử lý...`);
 
     // 1. Dịch sang tiếng Anh
     const translatedText = await translateToEnglish(text);
